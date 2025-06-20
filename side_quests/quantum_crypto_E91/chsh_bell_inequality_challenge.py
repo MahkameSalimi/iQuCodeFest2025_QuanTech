@@ -123,6 +123,11 @@ def create_bell_pair_singlet_state() -> QuantumCircuit:
     """
 
     # TODO: Student implementation goes here
+    circ = QuantumCircuit(2)
+    circ.x(0)
+    circ.h(0)
+    circ.cx(0,1)
+    return circ
     pass
     
 
@@ -140,7 +145,17 @@ def create_classical_random_state() -> QuantumCircuit:
                         classical (separable) state.
     """
     # TODO: Student implementation goes here
-    pass
+    qc = QuantumCircuit(2, name="RandomSeparableState")
+
+    theta_0 = np.random.uniform(0, np.pi)
+    phi_0 = np.random.uniform(0, 2 * np.pi)
+    qc.u(theta_0, phi_0, 0, 0)
+
+    theta_1 = np.random.uniform(0, np.pi)
+    phi_1 = np.random.uniform(0, 2 * np.pi)
+    qc.u(theta_1, phi_1, 0, 1)
+
+    return qc
 
 
 def create_eavesdropped_state(bell_qc: QuantumCircuit = None) -> QuantumCircuit:
@@ -159,7 +174,12 @@ def create_eavesdropped_state(bell_qc: QuantumCircuit = None) -> QuantumCircuit:
     This function is used to model eavesdropping in the E91 protocol, showing how Eve's measurement destroys quantum correlations.
     """
     # TODO: Student implementation goes here
-    pass    
+    measurement_circuit = bell_qc.copy()
+    measurement_circuit.measure_all()
+
+    return measurement_circuit
+
+pass
     
 
 # --------------------------------------------------------
@@ -192,8 +212,12 @@ def apply_basis_transformation(circuit: QuantumCircuit, qubit_index: int, basis:
                         to the specified qubit. This prepares the qubit for measurement in the chosen basis.
 
     """
-    
+
     # TODO: Student implementation goes here
+    theta = -int(basis)*np.pi/180
+
+    circuit.ry(theta,qubit_index)
+    return circuit
     pass
 
 
@@ -217,7 +241,18 @@ def measure_bell_pair(
         str: The measurement result string ('00', '01', etc.). Number of shots to use (shot=1).
     """
     # TODO: Student implementation goes here
-    pass
+    alice_index = 0
+    bob_index = 1
+    circ = apply_basis_transformation(circuit,alice_index,alice_basis)
+    circ = apply_basis_transformation(circ, bob_index, bob_basis)
+
+    simulator = AerSimulator(shots=1)
+    compiled_circuit = transpile(circ, simulator)
+    result = simulator.run(compiled_circuit).result()
+    counts = result.get_counts()
+    return list(counts.keys())[0]
+    return counts
+
     
     
 # --------------------------------------------------------
@@ -247,7 +282,26 @@ def run_bell_test_measurements(
             - list_chosen_bases_bob: List of Bob's bases used for each measurement.
     """
     # TODO: Student implementation goes here
-    pass
+    # Initialize lists to store the outcome of each trial
+    list_measurements_results = []
+    list_chosen_bases_alice = []
+    list_chosen_bases_bob = []
+
+    # Iterate through each prepared Bell pair
+    for bell_circuit in list_bell_pairs:
+        # For each pair, randomly choose the measurement bases
+        alice_basis = random.choice(list_alice_bases)
+        bob_basis = random.choice(list_bob_bases)
+
+        # Call the dedicated function to perform the measurement for this single trial
+        measurement_result = measure_bell_pair(bell_circuit, alice_basis, bob_basis)
+
+        # --- Record the results of this trial ---
+        list_measurements_results.append(measurement_result)
+        list_chosen_bases_alice.append(alice_basis)
+        list_chosen_bases_bob.append(bob_basis)
+
+    return list_measurements_results, list_chosen_bases_alice, list_chosen_bases_bob
     
 
 def organize_measurements_by_basis(
@@ -278,7 +332,24 @@ def organize_measurements_by_basis(
         It is essential for computing the correlation E(a, b) for each basis pair in the CHSH test.
     """
     # TODO: Student implementation goes here
+    organized_counts = defaultdict(Counter)
+
+    for a_basis, b_basis, result_outcome in zip(list_chosen_alice_bases, list_chosen_bob_bases,
+                                                list_measurements_results):
+        # Create the tuple key for the outer dictionary
+        basis_pair = (a_basis, b_basis)
+
+        organized_counts[basis_pair][result_outcome] += 1
+
+    final_dict = {key: dict(counter) for key, counter in organized_counts.items()}
+
+    return final_dict
+
+
+
     pass
+
+
     
 def calculate_correlations(
     measurements: dict[tuple[str, str], dict[str, int]]
@@ -305,6 +376,23 @@ def calculate_correlations(
                 {('0', '45'): 0.12, ...}
     """
     # TODO: Student implementation goes here
+    correlations = {}
+
+    for basis_pair, counts in measurements.items():
+        same_outcomes = counts.get('00', 0) + counts.get('11', 0)
+        different_outcomes = counts.get('01', 0) + counts.get('10', 0)
+
+        total_counts = same_outcomes + different_outcomes
+
+        if total_counts == 0:
+            correlation = 0.0
+        else:
+
+            correlation = (same_outcomes - different_outcomes) / total_counts
+
+        correlations[basis_pair] = correlation
+
+    return correlations
     pass
 
 
@@ -328,6 +416,18 @@ def calculate_chsh_value(
         float: The calculated CHSH Bell parameter S (absolute value).
     """
     # TODO: Student implementation goes here
+    a1, a2 = alice_bases
+    b1, b2 = bob_bases
+
+    e_a1_b1 = correlations.get((a1, b1))
+    e_a1_b2 = correlations.get((a1, b2))
+    e_a2_b1 = correlations.get((a2, b1))
+    e_a2_b2 = correlations.get((a2, b2))
+
+    s_value = e_a1_b1 - e_a1_b2 + e_a2_b1 + e_a2_b2
+
+    return abs(s_value)
+
     pass
     
 
@@ -343,6 +443,10 @@ def check_bell_inequality(chsh_value: float) -> bool:
         bool: True if the Bell inequality is violated (i.e., quantum entanglement detected), False otherwise.
     """
     # TODO: Student implementation goes here
+    if chsh_value >= 2:
+        return True
+    elif chsh_value < 2:
+        return False
     pass
     
 
@@ -370,29 +474,7 @@ def run_bell_test(
         float: The calculated CHSH value for this test.
     """
 
-    print(f"\nTest: {name}")
 
-    results_list, alice_bases_list, bob_bases_list = run_bell_test_measurements(
-        list_circuits, list_alice_bases=alice_bases, list_bob_bases=bob_bases)
-
-    bell_results = organize_measurements_by_basis(results_list, alice_bases_list, bob_bases_list)
-
-    correlations = calculate_correlations(bell_results)
-
-    bell_chsh = calculate_chsh_value(correlations=correlations)
-
-    print(f"CHSH value: {bell_chsh:.4f}")
-
-    verdict = 'Quantum entanglement detected!' if check_bell_inequality(bell_chsh) else 'No quantum correlations'
-
-    print(f"Verdict: {verdict}")
-
-    # Visualization
-    visualize_bell_test_results(correlations, bell_chsh, title=f"Bell Test Results: {name}")
-    plt.savefig(f"bell_state_results_{name}.png")
-    plt.show()
-
-    return bell_chsh
 
 
 def demonstrate_bell_inequality():
