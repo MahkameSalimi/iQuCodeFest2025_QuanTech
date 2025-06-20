@@ -110,7 +110,6 @@ def run_circuit(circ: QuantumCircuit, shots=1) -> dict:
 
     return result.get_counts(circ) # get the counts of the circuit
 
-
 # --------------------------------------------------------
 # === BELL STATE GENERATION ===
 # --------------------------------------------------------
@@ -122,7 +121,6 @@ def create_bell_pair_singlet_state() -> QuantumCircuit:
     Returns:
         QuantumCircuit: A quantum circuit with two qubits prepared in the singlet Bell state.
     """
-
     # TODO: Student implementation goes here
     circ = QuantumCircuit(2)
     circ.x(0)
@@ -130,8 +128,6 @@ def create_bell_pair_singlet_state() -> QuantumCircuit:
     circ.cx(0,1)
     circ.x(1)
     return circ
-
-    
 
 def create_classical_random_state() -> QuantumCircuit:
     """
@@ -172,16 +168,15 @@ def create_eavesdropped_state(bell_qc: QuantumCircuit = None) -> QuantumCircuit:
         - The output circuit is always a classical (separable) state, not entangled.
 
     This function is used to model eavesdropping in the E91 protocol, showing how Eve's measurement destroys quantum correlations.
+
     """
     # TODO: Student implementation goes here
 
     bell_qc.measure_all()
-    sim = aer_simulator()
+    sim = AerSimulator()
     trans_q = transpile(bell_qc,sim)
-    job = sim.run(trans_q).result()
-    res = job.result()
-
-    counts = re.get_counts()
+    result = sim.run(trans_q).result()
+    counts = result.get_counts()
 
     if '01' in counts:
         eve_o = QuantumCircuit(2)
@@ -229,14 +224,8 @@ def apply_basis_transformation(circuit: QuantumCircuit, qubit_index: int, basis:
 
     circuit.ry(theta,qubit_index)
     return circuit
-    pass
 
-
-def measure_bell_pair(
-    circuit: QuantumCircuit,
-    alice_basis: str,
-    bob_basis: str
-) -> str:
+def measure_bell_pair(circuit: QuantumCircuit, alice_basis: str, bob_basis: str) -> str:
     """
     Measure a Bell pair with Alice and Bob using specified bases.
 
@@ -261,29 +250,18 @@ def measure_bell_pair(
 
     # Use the global run_circuit helper
     counts = run_circuit(final_circ, shots=1)
-
-    for keys,val in counts.items():
-        if val ==1:
-            result = keys
-            break
+    result = list(counts.keys())[0]  # or: result, = counts
+    # for keys,val in counts.items():
+    #     if val == 1:
+    #         result = keys
+    #         break
     return result
-
-
-
-
-
-
-    
     
 # --------------------------------------------------------
 # === BELL TEST FUNCTIONS ===
 # --------------------------------------------------------
 
-def run_bell_test_measurements(
-    list_bell_pairs,
-    list_alice_bases=ALICE_BELL_BASES,
-    list_bob_bases=BOB_BELL_BASES
-):
+def run_bell_test_measurements(list_bell_pairs, list_alice_bases=ALICE_BELL_BASES, list_bob_bases=BOB_BELL_BASES):
     """
     Run measurements on Bell pairs using the standard CHSH test bases.
 
@@ -376,12 +354,6 @@ def organize_measurements_by_basis(
 
     return final_dict
 
-
-
-    pass
-
-
-    
 def calculate_correlations(
     measurements: dict[tuple[str, str], dict[str, int]]
 ) -> dict[tuple[str, str], float]:
@@ -424,8 +396,6 @@ def calculate_correlations(
         correlations[basis_pair] = correlation
 
     return correlations
-    pass
-
 
 def calculate_chsh_value(
     correlations: dict[tuple[str, str], float],
@@ -459,10 +429,6 @@ def calculate_chsh_value(
 
     return abs(s_value)
 
-    pass
-    
-
-
 def check_bell_inequality(chsh_value: float) -> bool:
     """
     Check if the CHSH value violates the Bell inequality.
@@ -476,11 +442,8 @@ def check_bell_inequality(chsh_value: float) -> bool:
     # TODO: Student implementation goes here
     if chsh_value >= 2:
         return True
-    elif chsh_value < 2:
+    else:
         return False
-    pass
-    
-
 
 # --------------------------------------------------------
 # === DEMONSTRATION FUNCTION ===
@@ -544,6 +507,11 @@ def run_bell_test(
 
     print("=========================================\n")
 
+    # Visualization
+    visualize_bell_test_results(correlations, s_value, title=f"Bell Test Results: {name}")
+    plt.savefig(f"bell_state_results_{name}.png")
+    plt.show()
+
     return s_value
 
 
@@ -590,9 +558,15 @@ def demonstrate_bell_inequality():
     
     list_eve_circuits = []
     n = 1000
+    fraction = 0.7
+    indices_with_eavesdropping = set(random.sample(range(n), int(n * fraction)))
+
     for i in range(n):
         qc = create_bell_pair_singlet_state()
-        ec = create_eavesdropped_state(qc)
+        if i in indices_with_eavesdropping:
+            ec = create_eavesdropped_state(qc)
+        else:
+            ec = qc
         list_eve_circuits.append(ec)
     
     run_bell_test(list_eve_circuits, "Eavesdropped state")
