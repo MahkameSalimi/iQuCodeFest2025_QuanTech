@@ -104,7 +104,9 @@ chsh bell test bases bob = ['90', '135']
 
 # E91 Quantum Key Distribution Protocol Implementation
 import random
-from qiskit import QuantumCircuit, QuantumRegister, transpile
+from qiskit import QuantumCircuit, QuantumRegister, transpile, ClassicalRegister
+import numpy as np
+from qiskit_aer import Aer, AerSimulator
 
 import encryption_algorithms as enc # contains the encryption and decryption algorithms
 
@@ -188,8 +190,21 @@ def measure_all_pairs(
         list[str]: A list str, each str is the measurement result string ('00', '01', etc.). Alice first bit, Bob second bit.
     """
     
-    results: list[str] = []
-    
+    results: list[tuple[str, str]] = []
+
+    for circuit in bell_pairs:
+        cReg = ClassicalRegister(2)
+        circuit.ry(np.random.choice(alice_bases)*np.pi/180, 0)
+        circuit.ry(np.random.choice(bob_bases)*np.pi/180, 1)
+        circuit.add_register(cReg)
+        circuit.measure([0, 1], [0, 1])
+        simulator = AerSimulator(1)
+        compiled_circuit = transpile(circuit, simulator)
+        result = simulator.run(compiled_circuit).result()
+        counts = result.get_counts()
+        output = counts[list(counts.keys())[0]]
+        results.append((output[0], output[1]))
+
     # TODO: Student implementation goes here
     # Hint: Use function from bell module
 
