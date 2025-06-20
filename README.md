@@ -11,7 +11,7 @@ Sabah Ud Din Ahmad, Mahkame Salimi Moghadam, Kayla McArthur, Armin Tabesh.
 Participants are invited to reimagine classic games by integrating quantum principles—such as superposition, entanglement, and quantum measurement—directly into the rules or gameplay. The goal is not to solve classical problems with quantum computers, but to create new, quantum-inspired versions of familiar games that showcase creativity and a deeper understanding of quantum concepts.
 
 ## Our Idea [Add Name]
-Add stuff here...
+
 
 
 ## Setup and Installation
