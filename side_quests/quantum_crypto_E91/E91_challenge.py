@@ -104,7 +104,7 @@ chsh bell test bases bob = ['90', '135']
 
 # E91 Quantum Key Distribution Protocol Implementation
 import random
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, QuantumRegister, transpile
 
 import encryption_algorithms as enc # contains the encryption and decryption algorithms
 
@@ -141,7 +141,7 @@ def generate_random_bases(length: int, options: list[str]) -> list[str]:
         list[str]: A list of randomly selected bases, with the specified `length`.
     """
     # TODO: Student implementation goes here
-    return [random.choice(options) for _ in range(length)] # gift from Algolab :p
+    return [random.choice(options) for _ in range(length)]  # gift from Algolab :p
 
 
 def create_list_bell_pairs(num_pairs: int) -> list[QuantumCircuit]:
@@ -158,7 +158,13 @@ def create_list_bell_pairs(num_pairs: int) -> list[QuantumCircuit]:
     """
     # TODO: Student implementation goes here
     # Hint: Use function from bell module
-    pass
+    bellGenerator = QuantumCircuit(2)  # |00>
+    bellGenerator.h(0)  # (|00> + |10>)/sqrt(2)
+    bellGenerator.cx(0, 1)  # (|00> + |11>)/sqrt(2)
+    bellGenerator.z(0)  # (|00> - |11>)/sqrt(2)
+    bellGenerator.x(0)  # (|10> - |01>)/sqrt(2)
+    return [bellGenerator.copy() for _ in range(num_pairs)]
+
 
 def measure_all_pairs(
     bell_pairs: list[QuantumCircuit],
