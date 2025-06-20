@@ -5,7 +5,8 @@ from qiskit_aer import AerSimulator
 from qiskit import transpile
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-
+from qiskit.circuit.library import UnitaryGate
+from qiskit.quantum_info import random_unitary
 
 # ------------------------------------------------------------------------------------
 # CHSH Bell inequality
@@ -127,8 +128,9 @@ def create_bell_pair_singlet_state() -> QuantumCircuit:
     circ.x(0)
     circ.h(0)
     circ.cx(0,1)
+    circ.x(1)
     return circ
-    pass
+
     
 
 def create_classical_random_state() -> QuantumCircuit:
@@ -147,13 +149,11 @@ def create_classical_random_state() -> QuantumCircuit:
     # TODO: Student implementation goes here
     qc = QuantumCircuit(2, name="RandomSeparableState")
 
-    theta_0 = np.random.uniform(0, np.pi)
-    phi_0 = np.random.uniform(0, 2 * np.pi)
-    qc.u(theta_0, phi_0, 0, 0)
+    U1 = UnitaryGate(random_unitary(2))
+    U2= UnitaryGate(random_unitary(2))
 
-    theta_1 = np.random.uniform(0, np.pi)
-    phi_1 = np.random.uniform(0, 2 * np.pi)
-    qc.u(theta_1, phi_1, 0, 1)
+    qc.append(U1,[0])
+    qc.append(U2,[1])
 
     return qc
 
@@ -174,12 +174,23 @@ def create_eavesdropped_state(bell_qc: QuantumCircuit = None) -> QuantumCircuit:
     This function is used to model eavesdropping in the E91 protocol, showing how Eve's measurement destroys quantum correlations.
     """
     # TODO: Student implementation goes here
-    measurement_circuit = bell_qc.copy()
-    measurement_circuit.measure_all()
 
-    return measurement_circuit
+    bell_qc.measure_all()
+    sim = aer_simulator()
+    trans_q = transpile(bell_qc,sim)
+    job = sim.run(trans_q).result()
+    res = job.result()
 
-pass
+    counts = re.get_counts()
+
+    if '01' in counts:
+        eve_o = QuantumCircuit(2)
+        eve_o.x(1)
+    else:
+        eve_o = QuantumCircuit(2)
+        eve_o.x(0)
+    return eve_o
+
     
 
 # --------------------------------------------------------
@@ -244,14 +255,23 @@ def measure_bell_pair(
     alice_index = 0
     bob_index = 1
     circ = apply_basis_transformation(circuit,alice_index,alice_basis)
-    circ = apply_basis_transformation(circ, bob_index, bob_basis)
+    final_circ = apply_basis_transformation(circ, bob_index, bob_basis)
 
-    simulator = AerSimulator(shots=1)
-    compiled_circuit = transpile(circ, simulator)
-    result = simulator.run(compiled_circuit).result()
-    counts = result.get_counts()
-    return list(counts.keys())[0]
-    return counts
+    final_circ.measure_all()
+
+    # Use the global run_circuit helper
+    counts = run_circuit(final_circ, shots=1)
+
+    for keys,val in counts.items():
+        if val ==1:
+            result = keys
+            break
+    return result
+
+
+
+
+
 
     
     
@@ -283,18 +303,19 @@ def run_bell_test_measurements(
     """
     # TODO: Student implementation goes here
     # Initialize lists to store the outcome of each trial
+    """"
     list_measurements_results = []
     list_chosen_bases_alice = []
     list_chosen_bases_bob = []
-
+    
     # Iterate through each prepared Bell pair
-    for bell_circuit in list_bell_pairs:
+    for circuit in list_bell_pairs:
         # For each pair, randomly choose the measurement bases
         alice_basis = random.choice(list_alice_bases)
         bob_basis = random.choice(list_bob_bases)
 
         # Call the dedicated function to perform the measurement for this single trial
-        measurement_result = measure_bell_pair(bell_circuit, alice_basis, bob_basis)
+        measurement_result = measure_bell_pair(circuit, alice_basis, bob_basis)
 
         # --- Record the results of this trial ---
         list_measurements_results.append(measurement_result)
@@ -302,7 +323,16 @@ def run_bell_test_measurements(
         list_chosen_bases_bob.append(bob_basis)
 
     return list_measurements_results, list_chosen_bases_alice, list_chosen_bases_bob
-    
+    """
+    results, alice_choices, bob_choices = [], [], []
+    for circuit in list_bell_pairs:
+        alice_basis = random.choice(list_alice_bases)
+        bob_basis = random.choice(list_bob_bases)
+        measurement_result = measure_bell_pair(circuit, alice_basis, bob_basis)
+        results.append(measurement_result)
+        alice_choices.append(alice_basis)
+        bob_choices.append(bob_basis)
+    return results, alice_choices, bob_choices
 
 def organize_measurements_by_basis(
     list_measurements_results: list[str], 
@@ -332,9 +362,10 @@ def organize_measurements_by_basis(
         It is essential for computing the correlation E(a, b) for each basis pair in the CHSH test.
     """
     # TODO: Student implementation goes here
+    from collections import defaultdict, Counter
     organized_counts = defaultdict(Counter)
 
-    for a_basis, b_basis, result_outcome in zip(list_chosen_alice_bases, list_chosen_bob_bases,
+    for a_basis, b_basis, result_outcome in zip(list_chosen_bases_alice, list_chosen_bases_bob,
                                                 list_measurements_results):
         # Create the tuple key for the outer dictionary
         basis_pair = (a_basis, b_basis)
@@ -473,8 +504,47 @@ def run_bell_test(
     Returns:
         float: The calculated CHSH value for this test.
     """
+    import pprint
+    print(f"\n===== Running Bell Test for: {name} =====")
 
+    # Step 1: Run the measurements to get raw data
+    results, alice_choices, bob_choices = run_bell_test_measurements(
+        list_circuits, alice_bases, bob_bases
+    )
+    print(f"-> Completed {len(results)} measurements.")
 
+    # Step 2: Organize results by basis pair
+    organized_data = organize_measurements_by_basis(results, alice_choices, bob_choices)
+    print("-> Organized measurement counts by basis pair:")
+    pprint.pprint(organized_data)
+
+    # Step 3: Calculate the correlation values
+    correlations = calculate_correlations(organized_data)
+    print("\n-> Calculated correlation values E(a, b):")
+    pprint.pprint(correlations)
+
+    # Step 4: Compute the final CHSH S-value
+    s_value = calculate_chsh_value(correlations, alice_bases, bob_bases)
+
+    # Step 5: Print the final summary
+    print("\n----- CHSH Test Summary -----")
+    print(f"Final S-value: {s_value:.4f}")
+
+    # Compare against the classical and quantum bounds
+    classical_limit = 2.0
+    quantum_limit = 2 * np.sqrt(2)  # Tsirelson's bound
+
+    print(f"Classical Limit (S <= {classical_limit})")
+    print(f"Quantum Bound (S <= {quantum_limit:.4f})")
+
+    if s_value > classical_limit:
+        print("\nResult: VIOLATION of Bell's inequality observed! The results are non-classical.")
+    else:
+        print("\nResult: No violation of Bell's inequality observed. The results are consistent with local realism.")
+
+    print("=========================================\n")
+
+    return s_value
 
 
 def demonstrate_bell_inequality():
@@ -495,15 +565,22 @@ def demonstrate_bell_inequality():
 
     # Test 1: Ideal entangled Bell state
     print("Test 1: Ideal Bell state |Ψ-⟩ = (|01⟩ - |10⟩)/√2  - Singlet state used in original E91")
-    list_bell_circuits = None # TODO
-    
+    list_bell_circuits = [] # TODO
+    n=1000
+    for i in range(n):
+        qc = create_bell_pair_singlet_state()
+        list_bell_circuits.append(qc)
+
     run_bell_test(list_bell_circuits, "Ideal Bell state")
 
     # --------------------------------------------------------
     # Test 2: Classical (non-entangled) state
     print("\nTest 2: Classical state (no entanglement)")
-    list_classical_circuits = None # TODO
-    
+    list_classical_circuits = [] # TODO
+    n = 1000
+    for i in range(n):
+        c = create_classical_random_state()
+        list_classical_circuits.append(c)
     run_bell_test(list_classical_circuits, "Classical state")
 
     # --------------------------------------------------------
@@ -511,7 +588,12 @@ def demonstrate_bell_inequality():
     print("\nTest 3: Entangled state with eavesdropping")
     print(f"Eve compromises {EVE_PERCENTAGE_COMPROMISED*100}% of Bell pairs, reducing the Bell parameter.")
     
-    list_eve_circuits = None # TODO
+    list_eve_circuits = []
+    n = 1000
+    for i in range(n):
+        qc = create_bell_pair_singlet_state()
+        ec = create_eavesdropped_state(qc)
+        list_eve_circuits.append(ec)
     
     run_bell_test(list_eve_circuits, "Eavesdropped state")
 
